@@ -20,46 +20,64 @@ async def get_all_categories(db: Annotated[Session, Depends(get_db)]):
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_category(db: Annotated[Session, Depends(get_db)], create_category: CreateCategory):
-    db.execute(insert(Category).values(
-        name=create_category.name,
-        parent_id=create_category.parent_id,
-        slug=slugify(create_category.name)
-    ))
+async def create_category(
+    db: Annotated[Session, Depends(get_db)], create_category: CreateCategory
+):
+    db.execute(
+        insert(Category).values(
+            name=create_category.name,
+            parent_id=create_category.parent_id,
+            slug=slugify(create_category.name),
+        )
+    )
     db.commit()
-    return {
-        "status_code": status.HTTP_201_CREATED,
-        "transaction": "Successful"
-    }
+    return {"status_code": status.HTTP_201_CREATED, "transaction": "Successful"}
 
 
 @router.put("/{category_slug}", status_code=status.HTTP_200_OK)
 async def update_category(
-        db: Annotated[Session, Depends(get_db)], update_category: CreateCategory, category_slug: str
+    db: Annotated[Session, Depends(get_db)],
+    update_category: CreateCategory,
+    category_slug: str,
 ):
     category = db.scalar(select(Category).where(Category.slug == category_slug))
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="There is no category found")
-    db.execute(update(Category).where(Category.slug == category_slug).values(
-        name=update_category.name,
-        parent_id=update_category.parent_id,
-        slug=slugify(update_category.name)
-    ))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="There is no category found"
+        )
+    db.execute(
+        update(Category)
+        .where(Category.slug == category_slug)
+        .values(
+            name=update_category.name,
+            parent_id=update_category.parent_id,
+            slug=slugify(update_category.name),
+        )
+    )
     db.commit()
     return {
         "status_code": status.HTTP_200_OK,
-        "transaction": "Product update is successful"
+        "transaction": "Product update is successful",
     }
 
 
 @router.delete("/{category_slug}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_category(db: Annotated[Session, Depends(get_db)], category_slug: str):
-    category = db.scalar(select(Category).where(
-        Category.slug == category_slug, Category.is_active == True
-    ))
+    category = db.scalar(
+        select(Category).where(
+            Category.slug == category_slug, Category.is_active == True
+        )
+    )
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="There is no category found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="There is no category found"
+        )
 
-    db.execute(update(Category).where(Category.slug == category_slug).values(is_active=False))
+    db.execute(
+        update(Category).where(Category.slug == category_slug).values(is_active=False)
+    )
     db.commit()
-    return {"status_code": status.HTTP_204_NO_CONTENT, "transaction": "Product delete is successful"}
+    return {
+        "status_code": status.HTTP_204_NO_CONTENT,
+        "transaction": "Product delete is successful",
+    }

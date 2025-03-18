@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 
 
 class Category(Base):
-    __tablename__ = 'categories'
+    __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
@@ -13,4 +13,3 @@ class Category(Base):
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
 
     products = relationship("Product", back_populates="category")
-

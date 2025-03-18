@@ -51,19 +51,23 @@ class ErrorLoggingMiddleware:
             self.log_error(
                 request=request,
                 status_code=status_code,
-                error_message=error_message or response_body.decode()
+                error_message=error_message or response_body.decode(),
             )
 
     async def _send_error_response(self, send, status_code: int, message: str):
-        await send({
-            "type": "http.response.start",
-            "status": status_code,
-            "headers": [(b"content-type", b"text/plain; charset=utf-8")]
-        })
-        await send({
-            "type": "http.response.body",
-            "body": message.encode(),
-        })
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status_code,
+                "headers": [(b"content-type", b"text/plain; charset=utf-8")],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": message.encode(),
+            }
+        )
 
     def log_error(self, request: Request, status_code: int, error_message: str):
         with SessionLocal() as session:
