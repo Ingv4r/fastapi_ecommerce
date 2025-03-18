@@ -3,7 +3,7 @@ import logging
 from fastapi import Request, HTTPException
 from starlette.types import Scope, Receive, Send, Message, ASGIApp
 
-from app.backend.db import SessionLocal
+from app.backend.db import async_session_maker
 from app.models.error_log import ErrorLog
 
 
@@ -48,29 +48,25 @@ class ErrorLoggingMiddleware:
             await self._send_error_response(send, status_code, "Internal Server Error")
 
         if status_code >= 400:
-            self.log_error(
+            await self.log_error(
                 request=request,
                 status_code=status_code,
                 error_message=error_message or response_body.decode(),
             )
 
     async def _send_error_response(self, send, status_code: int, message: str):
-        await send(
-            {
-                "type": "http.response.start",
-                "status": status_code,
-                "headers": [(b"content-type", b"text/plain; charset=utf-8")],
-            }
-        )
-        await send(
-            {
-                "type": "http.response.body",
-                "body": message.encode(),
-            }
-        )
+        await send({
+            "type": "http.response.start",
+            "status": status_code,
+            "headers": [(b"content-type", b"text/plain; charset=utf-8")],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": message.encode(),
+        })
 
-    def log_error(self, request: Request, status_code: int, error_message: str):
-        with SessionLocal() as session:
+    async def log_error(self, request: Request, status_code: int, error_message: str):
+        async with async_session_maker() as session:
             try:
                 error_log = ErrorLog(
                     path=request.url.path,
@@ -79,7 +75,7 @@ class ErrorLoggingMiddleware:
                     error_message=error_message[:255],  # Ограничение длины
                 )
                 session.add(error_log)
-                session.commit()
+                await session.commit()
             except Exception as e:
                 logging.error(f"Error saving log: {str(e)}")
-                session.rollback()
+                await session.rollback()

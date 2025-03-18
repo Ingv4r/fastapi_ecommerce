@@ -1,10 +1,10 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Category
 
 
-def get_all_category_ids(db: Session, root_category_id: int) -> list[int]:
+async def get_all_category_ids(db: AsyncSession, root_category_id: int):
     category_cte = (
         select(Category.id)
         .where(Category.id == root_category_id)
@@ -12,6 +12,6 @@ def get_all_category_ids(db: Session, root_category_id: int) -> list[int]:
     )
     subquery = select(Category.id).where(Category.parent_id == category_cte.c.id)
     category_cte = category_cte.union_all(subquery)
-    category_ids = db.scalars(select(category_cte.c.id)).all()
+    category_ids = await db.scalars(select(category_cte.c.id))
 
-    return category_ids
+    return category_ids.all()
