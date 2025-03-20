@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.middlewares.error_log import ErrorLoggingMiddleware
-from app.routers import category, products, errors
+from app.routers import category, products, auth, errors
 
 
 app = FastAPI()
@@ -15,4 +15,5 @@ async def welcome() -> dict:
 
 app.include_router(category.router)
 app.include_router(products.router)
+app.include_router(auth.router)
 # app.include_router(errors.router)
