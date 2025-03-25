@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import jwt
 
@@ -24,6 +26,7 @@ security = HTTPBasic()
 
 SECRET_KEY = os.environ.get("SECRET_KEY")
 ALGORITHM = os.environ.get("ALGORITHM")
+print(ALGORITHM)
 
 
 async def authenticate_user(db: Annotated[AsyncSession, Depends(get_db)], username: str, password: str):
@@ -46,7 +49,7 @@ async def create_access_token(
 
     payload = {
         "sub": username,
-        "user_id": user_id,
+        "id": user_id,
         "is_admin": is_admin,
         "is_superuser": is_superuser,
         "is_customer": is_customer,
@@ -90,18 +93,18 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired!")
 
-    except jwt.exceptions:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate user")
+    except jwt.PyJWTError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e)
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_user(db: Annotated[AsyncSession, Depends(get_db)], create_user: CreateUser):
+async def create_user(db: Annotated[AsyncSession, Depends(get_db)], user: CreateUser):
     await db.execute(insert(User).values(
-        first_name=create_user.first_name,
-        last_name=create_user.last_name,
-        username=create_user.username,
-        email=create_user.email,
-        hashed_password=bcrypt_context.hash(create_user.password)
+        first_name=user.first_name,
+        last_name=user.last_name,
+        username=user.username,
+        email=user.email,
+        hashed_password=bcrypt_context.hash(user.password)
     ))
     await db.commit()
     return {
@@ -128,5 +131,5 @@ async def login(
 
 
 @router.get("/read_current_user")
-async def read_current_user(current_user: User = Depends(get_current_user)):
+async def read_current_user(current_user: dict = Depends(get_current_user)):
     return current_user

@@ -4,7 +4,7 @@ from app.middlewares.error_log import ErrorLoggingMiddleware
 from app.routers import category, products, auth, errors
 
 
-app = FastAPI()
+app = FastAPI(swagger_ui_parameters={"persistAuthorization": True})
 # app.add_middleware(ErrorLoggingMiddleware)
 
 
