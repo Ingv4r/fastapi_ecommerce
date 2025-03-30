@@ -1,7 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import insert, select, update
+from fastapi import APIRouter, Depends
+from slugify import slugify
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
@@ -10,8 +11,6 @@ from app.models import Category
 from app.models.user import User
 from app.routers.permission import only_admin_permission
 from app.schemas import CreateCategory, GetCategory
-from slugify import slugify
-
 from app.service import get_object_or_404
 
 router = APIRouter(prefix="/categories", tags=["category"])
@@ -19,7 +18,7 @@ router = APIRouter(prefix="/categories", tags=["category"])
 
 @router.get("/", response_model=list[GetCategory])
 async def get_all_categories(db: Annotated[AsyncSession, Depends(get_db)]):
-    categories = await db.scalars(select(Category).where(Category.is_active == True))
+    categories = await db.scalars(select(Category).filter(Category.is_active == True))
     return categories
 
 

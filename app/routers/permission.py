@@ -1,7 +1,6 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
@@ -15,8 +14,8 @@ router = APIRouter(prefix="/permission", tags=["permission"])
 
 
 async def only_admin_permission(
-    user: Annotated[User, Depends(get_current_user)],
-) -> User:
+        user: Annotated[User, Depends(get_current_user)], ) -> User:
+
     if not user.is_admin:
         raise HTTPException(
             detail="You must be admin user for this",
@@ -25,13 +24,24 @@ async def only_admin_permission(
     return user
 
 
+async def admin_or_supplier_permission(
+        user: Annotated[User, Depends(get_current_user)]) -> User:
+
+    if not (user.is_admin or user.is_supplier):
+        raise HTTPException(
+            detail="You must be admin or supplier for this",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+    return user
+
+
 @router.patch("/user_status/{user_id}", response_model=GetUser, status_code=status.HTTP_200_OK)
 async def change_user_status_by_admin(
-    user_id: int,
-    user_data: UserStatusUpdate,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(only_admin_permission)],
-):
+        user_id: int,
+        user_data: UserStatusUpdate,
+        db: Annotated[AsyncSession, Depends(get_db)],
+        _: Annotated[User, Depends(only_admin_permission)],) -> GetUser:
+
     target_user = await get_object_or_404(db, User, User.id == user_id)
     target_user.is_admin = user_data.is_admin
     target_user.is_supplier = user_data.is_supplier

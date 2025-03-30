@@ -23,7 +23,7 @@ class GetProduct(BaseModel):
     rating: int
     is_active: bool
     category_id: int
-    supplier_id: int
+    supplier_id: int | None
 
 
 class CreateCategory(BaseModel):
@@ -36,7 +36,7 @@ class GetCategory(BaseModel):
     name: str
     slug: str
     is_active: bool
-    parent_id: int
+    parent_id: int | None
 
 class CreateUser(BaseModel):
     first_name: str
