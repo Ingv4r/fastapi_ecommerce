@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import os
-import jwt
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Any
 
+import jwt
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, status, HTTPException
 from fastapi.security import HTTPBasic, OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import select, insert
-from typing import Annotated
-from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
-from app.schemas import CreateUser
 from app.backend.db_depends import get_db
-from dotenv import load_dotenv
-from datetime import datetime, timedelta, timezone
-
+from app.models.user import User
+from app.service import get_object_or_404
 
 load_dotenv()
 
@@ -40,17 +39,29 @@ async def authenticate_user(db: Annotated[AsyncSession, Depends(get_db)], userna
 
 
 async def create_access_token(
-        username: str, user_id: int, is_admin: bool,
-        is_superuser: bool, is_customer: bool, expires_delta: timedelta):
+        username: str,
+        first_name: str,
+        last_name: str,
+        email: str,
+        user_id: int,
+        is_active: bool,
+        is_admin: bool,
+        is_supplier: bool,
+        is_customer: bool,
+        expires_delta: timedelta):
 
     exp = datetime.now(timezone.utc) + expires_delta
     exp = int(exp.timestamp())
 
     payload = {
-        "sub": username,
+        "username": username,
         "id": user_id,
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+        "is_active": is_active,
         "is_admin": is_admin,
-        "is_superuser": is_superuser,
+        "is_supplier": is_supplier,
         "is_customer": is_customer,
         "exp": exp
     }
@@ -58,58 +69,20 @@ async def create_access_token(
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-
+async def get_current_user(
+        token: Annotated[str, Depends(oauth2_scheme)],
+        db: Annotated[AsyncSession, Depends(get_db)]):
+    """Декодирование токена, получение дынных из payload -> `User`."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str | None = payload.get("sub")
-        user_id: int | None = payload.get("id")
-        is_admin: bool | None = payload.get("is_admin")
-        is_superuser: bool | None = payload.get("is_superuser")
-        is_customer: bool | None = payload.get("is_customer")
-        expire: int | None = payload.get("exp")
-
-        if username is None or user_id is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate user")
-        if expire is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No access token supplied")
-        if not isinstance(expire, int):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format")
-
-        current_time = datetime.now(timezone.utc).timestamp()
-
-        if expire < current_time:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired!")
-
-        return {
-            "username": username,
-            "id": user_id,
-            "is_admin": is_admin,
-            "is_superuser": is_superuser,
-            "is_customer": is_customer,
-        }
-
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired!")
-
-    except jwt.PyJWTError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=e)
-
-
-@router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_user(db: Annotated[AsyncSession, Depends(get_db)], user: CreateUser):
-    await db.execute(insert(User).values(
-        first_name=user.first_name,
-        last_name=user.last_name,
-        username=user.username,
-        email=user.email,
-        hashed_password=bcrypt_context.hash(user.password)
-    ))
-    await db.commit()
-    return {
-        "status_code": status.HTTP_201_CREATED,
-        "transaction": "User created successfully"
-    }
+        payload: dict[str, Any] = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+        user = await get_object_or_404(db, User, User.id == payload.get("id"))
+        return user
+    except jwt.PyJWTError:
+        raise HTTPException(
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
 
 
 @router.post("/token", status_code=status.HTTP_200_OK)
@@ -119,16 +92,19 @@ async def login(
 
     user = await authenticate_user(db, form_data.username, form_data.password)
     token = await create_access_token(
-        user.username, user.id, user.is_admin, user.is_supplier,
-        user.is_customer, expires_delta=timedelta(minutes=20)
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        email=user.email,
+        user_id=user.id,
+        is_active=user.is_active,
+        is_admin=user.is_admin,
+        is_supplier=user.is_supplier,
+        is_customer=user.is_customer,
+        expires_delta=timedelta(minutes=30)
     )
 
     return {
         "access_token": token,
         "token_type": "bearer"
     }
-
-
-@router.get("/read_current_user")
-async def read_current_user(current_user: dict = Depends(get_current_user)):
-    return current_user

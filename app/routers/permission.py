@@ -8,27 +8,34 @@ from starlette import status
 from app.backend.db_depends import get_db
 from app.models.user import User
 from app.routers.auth import get_current_user
+from app.schemas import GetUser, UserStatusUpdate
+from app.service import get_object_or_404
 
 router = APIRouter(prefix="/permission", tags=["permission"])
 
 
-@router.patch("/")
-async def supplier_permission(db: Annotated[AsyncSession, Depends(get_db)],
-                              get_user: Annotated[dict, Depends(get_current_user)],
-                              user_id: int):
-    if get_user.get("is_admin"):
-        user: User = await db.scalar(select(User).where(User.id == user_id))
+async def only_admin_permission(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if not user.is_admin:
+        raise HTTPException(
+            detail="You must be admin user for this",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+    return user
 
-        if not user or not user.is_active:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        if user.is_supplier:
-            await db.execute(update(User).where(User.id == user_id).values(is_supplier=False, is_cutomer=True))
-            await db.commit()
-            return {"status_code": status.HTTP_200_OK, "detail": "User is no longer supplier"}
-        else:
-            await db.execute(update(User).where(User.id == user_id).values(is_supplier=True, is_cutomer=False))
-            await db.commit()
-            return {"status_code": status.HTTP_200_OK, "detail": "User is now supplier"}
 
-    else:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have admin permission")
+@router.patch("/user_status/{user_id}", response_model=GetUser, status_code=status.HTTP_200_OK)
+async def change_user_status_by_admin(
+    user_id: int,
+    user_data: UserStatusUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(only_admin_permission)],
+):
+    target_user = await get_object_or_404(db, User, User.id == user_id)
+    target_user.is_admin = user_data.is_admin
+    target_user.is_supplier = user_data.is_supplier
+    target_user.is_customer = user_data.is_customer
+    await db.commit()
+    await db.refresh(target_user)
+    return target_user

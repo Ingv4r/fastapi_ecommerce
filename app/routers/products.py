@@ -2,35 +2,30 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from slugify import slugify
-from sqlalchemy import insert, update, select
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
 from app.backend.db_depends import get_db
 from app.models import Product, Category
 from app.routers.utils import get_all_category_ids
-from app.schemas import CreateProduct
+from app.schemas import CreateProduct, GetProduct
 
 router = APIRouter(prefix="/products", tags=["products"])
 
 
-@router.get("/", status_code=status.HTTP_200_OK)
-async def all_products(db: Annotated[AsyncSession, Depends(get_db)]):
+@router.get("/", status_code=status.HTTP_200_OK, response_model=list[GetProduct])
+async def available_products(db: Annotated[AsyncSession, Depends(get_db)]):
     products = await db.scalars(
         select(Product)
         .join(Category)
         .where(Product.is_active == True, Category.is_active == True, Product.stock > 0)
     )
 
-    if not products:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="There are no products"
-        )
-
-    return products.all()
+    return products
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=GetProduct)
 async def create_product(
         db: Annotated[AsyncSession, Depends(get_db)], create_product: CreateProduct
 ):

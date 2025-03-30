@@ -7,69 +7,61 @@ from starlette import status
 
 from app.backend.db_depends import get_db
 from app.models import Category
-from app.schemas import CreateCategory
+from app.models.user import User
+from app.routers.permission import only_admin_permission
+from app.schemas import CreateCategory, GetCategory
 from slugify import slugify
+
+from app.service import get_object_or_404
 
 router = APIRouter(prefix="/categories", tags=["category"])
 
 
-@router.get("/")
+@router.get("/", response_model=list[GetCategory])
 async def get_all_categories(db: Annotated[AsyncSession, Depends(get_db)]):
     categories = await db.scalars(select(Category).where(Category.is_active == True))
-    return categories.all()
+    return categories
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_category(db: Annotated[AsyncSession, Depends(get_db)], create_category: CreateCategory):
-    await db.execute(
-        insert(Category).values(
-            name=create_category.name,
-            parent_id=create_category.parent_id,
-            slug=slugify(create_category.name),
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=GetCategory)
+async def create_category(db: Annotated[AsyncSession, Depends(get_db)],
+                          _: Annotated[User, Depends(only_admin_permission)],
+                          category_create: CreateCategory):
+    category = Category(
+            name=category_create.name,
+            parent_id=category_create.parent_id,
+            slug=slugify(category_create.name),
         )
-    )
+    db.add(category)
     await db.commit()
-    return {"status_code": status.HTTP_201_CREATED, "transaction": "Successful"}
+    await db.refresh(category)
+
+    return category
 
 
-@router.put("/{category_slug}", status_code=status.HTTP_200_OK)
+@router.put("/{category_slug}", status_code=status.HTTP_200_OK, response_model=GetCategory)
 async def update_category(
         db: Annotated[AsyncSession, Depends(get_db)],
-        update_category: CreateCategory,
+        _: Annotated[User, Depends(only_admin_permission)],
+        category_update: CreateCategory,
         category_slug: str):
-    category = await db.scalar(select(Category).where(Category.slug == category_slug))
+    category = await get_object_or_404(db, Category, Category.slug == category_slug)
 
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="There is no category found"
-        )
-
-    category.name = update_category.name
-    category.parent_id = update_category.parent_id
-    category.slug = slugify(update_category.name)
+    category.name = category_update.name
+    category.parent_id = category_update.parent_id
+    category.slug = slugify(category_update.name)
     await db.commit()
+    await db.refresh(category)
 
-    return {
-        "status_code": status.HTTP_200_OK,
-        "transaction": "Product update is successful",
-    }
+    return category
 
 
 @router.delete("/{category_slug}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_category(db: Annotated[AsyncSession, Depends(get_db)], category_slug: str):
-    category = await db.scalar(
-        select(Category).where(Category.slug == category_slug, Category.is_active == True)
-    )
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="There is no category found"
-        )
+async def delete_category(db: Annotated[AsyncSession, Depends(get_db)],
+                          _: Annotated[User, Depends(only_admin_permission)],
+                          category_slug: str) -> None:
+    category = await get_object_or_404(db, Category, Category.slug == category_slug)
 
     category.is_active = False
     await db.commit()
-
-    return {
-        "status_code": status.HTTP_204_NO_CONTENT,
-        "transaction": "Product delete is successful",
-    }
+    await db.refresh(category)
