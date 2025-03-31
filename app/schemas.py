@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class CreateProduct(BaseModel):
@@ -38,6 +41,7 @@ class GetCategory(BaseModel):
     is_active: bool
     parent_id: int | None
 
+
 class CreateUser(BaseModel):
     first_name: str
     last_name: str
@@ -61,3 +65,29 @@ class UserStatusUpdate(BaseModel):
     is_admin: bool = False
     is_supplier: bool = False
     is_customer: bool = False
+
+
+class ReviewBase(BaseModel):
+    comment: Optional[str] = Field(None, max_length=500)
+    grade: float = Field(None, ge=1, le=10)
+    product_id: Optional[int] = None
+
+
+class ReviewCreate(ReviewBase):
+    user_id: int
+
+
+class ReviewUpdate(BaseModel):
+    comment: Optional[str] = Field(None, max_length=500)
+    grade: Optional[float] = Field(None, ge=1, le=10)
+    is_active: Optional[bool] = None
+
+
+class ReviewRead(ReviewBase):
+    id: int
+    comment_date: datetime
+    is_active: bool
+    user_id: int
+
+    class Config:
+        from_attributes = True
