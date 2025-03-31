@@ -71,7 +71,7 @@ async def create_access_token(
 
 async def get_current_user(
         token: Annotated[str, Depends(oauth2_scheme)],
-        db: Annotated[AsyncSession, Depends(get_db)]):
+        db: Annotated[AsyncSession, Depends(get_db)]) -> User:
     """Декодирование токена, получение дынных из payload -> `User`."""
     try:
         payload: dict[str, Any] = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)

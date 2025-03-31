@@ -20,3 +20,4 @@ class Product(Base):
 
     category = relationship("Category", back_populates="products")
     supplier = relationship("User", back_populates="products")
+    reviews = relationship("Review", back_populates="product")

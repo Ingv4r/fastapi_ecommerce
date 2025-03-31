@@ -1,30 +1,20 @@
-from typing import Union, Tuple, Any
+from typing import Union, Tuple, Any, Annotated
 
-from fastapi import HTTPException
-from sqlalchemy import select, BinaryExpression
+from fastapi import HTTPException, Depends
+from sqlalchemy import select, BinaryExpression, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
+from app.backend.db_depends import get_db
+from app.models import Product
+from app.models.review import Review
+
 
 async def get_object_or_404(
-        db_session: AsyncSession,
+        db: Annotated[AsyncSession, Depends(get_db)],
         model: type,
         *expressions: Union[BinaryExpression, Tuple[BinaryExpression, ...]]
 ) -> Any:
-    """
-    Получает объект из БД или возвращает 404 ошибку.
-
-    Args:
-        db_session: Асинхронная сессия SQLAlchemy
-        model: Модель SQLAlchemy
-        *expressions: Одно или несколько условий фильтрации
-
-    Returns:
-        Найденный объект модели
-
-    Raises:
-        HTTPException: 404 если объект не найден
-    """
     query = select(model)
 
     if expressions:
@@ -33,7 +23,7 @@ async def get_object_or_404(
         else:
             query = query.where(*expressions)
 
-    instance = await db_session.scalar(query)
+    instance = await db.scalar(query)
 
     if not instance:
         raise HTTPException(
@@ -42,3 +32,15 @@ async def get_object_or_404(
         )
 
     return instance
+
+
+async def update_product_rating(db: Annotated[AsyncSession, Depends(get_db)], product_id: int):
+    avg_rating = await db.scalar(
+        select(func.avg(Review.grade).filter(Review.product_id == product_id, Review.is_active == True))
+    )
+    await db.execute(
+        update(Product)
+        .where(Product.id == product_id)
+        .values(rating=round(avg_rating or 0.0, 1))
+    )
+    await db.commit()

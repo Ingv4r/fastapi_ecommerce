@@ -23,7 +23,7 @@ class GetProduct(BaseModel):
     price: int
     image_url: str
     stock: int
-    rating: int
+    rating: float
     is_active: bool
     category_id: int
     supplier_id: int | None
