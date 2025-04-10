@@ -11,7 +11,7 @@ celery_app = Celery(
 celery_app.conf.beat_schedule = {
     'run-me-background-task': {
         'task': 'app.celery.tasks.high_priority_task',
-        'schedule': crontab(hour=7, minute=0),
+        'schedule': 30,
         'args': ('Test text message',)
     }
 }

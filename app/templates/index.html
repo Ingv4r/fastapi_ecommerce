@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f3f4f6;
+            --message-bg: #ffffff;
+            --user-message-bg: #dbeafe;
+            --text-color: #1f2937;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            width: 95%;
+        }
+
+        .header {
+            padding: 1.5rem;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .chat-window {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 70%;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .received {
+            align-self: flex-start;
+        }
+
+        .sent {
+            align-self: flex-end;
+        }
+
+        .message-content {
+            padding: 10px 15px;
+            border-radius: 12px;
+            word-break: break-word;
+        }
+
+        .received .message-content {
+            background: var(--message-bg);
+            border: 1px solid #e5e7eb;
+            color: var(--text-color);
+        }
+
+        .sent .message-content {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            border-radius: 0 0 12px 12px;
+        }
+
+        .message-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .send-button {
+            padding: 12px 24px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .send-button:hover {
+            opacity: 0.9;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 480px) {
+            .message {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-comments"></i> FastAPI Chat</h1>
+        </div>
+
+        <div class="chat-window" id="messages"></div>
+
+        <div class="input-area">
+            <form onsubmit="sendMessage(event)" class="message-form" id="form">
+                <input type="text"
+                       class="message-input"
+                       id="messageText"
+                       autocomplete="off"
+                       placeholder="Type your message...">
+                <button type="submit" class="send-button">
+                    <i class="fas fa-paper-plane"></i> Send
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+const clientID = Date.now();
+        const ws = new WebSocket(`ws://${window.location.host}/ws/${clientID}`);
+        const messagesContainer = document.getElementById('messages');
+
+        function createMessageElement(text, isSent = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            content.textContent = text;
+
+            messageDiv.appendChild(content);
+            return messageDiv;
+        }
+
+        ws.onmessage = function(event) {
+            try {
+                // Попытка парсинга JSON
+                const data = JSON.parse(event.data);
+                const isOwnMessage = data.senderId === clientID.toString();
+                const messageElement = createMessageElement(data.message, isOwnMessage);
+                messagesContainer.appendChild(messageElement);
+            } catch {
+                // Если пришло обычное текстовое сообщение
+                const messageElement = createMessageElement(event.data);
+                messagesContainer.appendChild(messageElement);
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        };
+
+        async function sendMessage(event) {
+            event.preventDefault();
+            const input = document.getElementById('messageText');
+            const message = input.value.trim();
+
+            if (message) {
+                // Отправляем JSON с идентификатором отправителя
+                ws.send(JSON.stringify({
+                    senderId: clientID,
+                    message: message
+                }));
+
+                // Локальное отображение своего сообщения
+                const messageElement = createMessageElement(message, true);
+                messagesContainer.appendChild(messageElement);
+                input.value = '';
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }
+
+        ws.onclose = function() {
+            const messageElement = createMessageElement('Connection closed');
+            messagesContainer.appendChild(messageElement);
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket Error:', error);
+        };
+    </script>
+</body>
+</html>

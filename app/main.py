@@ -1,16 +1,45 @@
+import json
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette import status
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
+from starlette.templating import Jinja2Templates
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from app.routers import category, products, auth, permission, users, review, celery
-
+from app.routers.websocket import ConnectionManager
 
 load_dotenv()
 
 app = FastAPI(swagger_ui_parameters={"persistAuthorization": True})
+templates = Jinja2Templates(directory="app/templates")
+manager = ConnectionManager()
+
+
+@app.get("/", response_class=HTMLResponse)
+async def read_index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: int):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            formatted_message = message_data.get('message', '')
+            await manager.broadcast(
+                {"senderId": str(client_id), "message": formatted_message}, websocket
+            )
+    except WebSocketDisconnect as e:
+        manager.connections.remove(websocket)
+        print(f'Connection closed {e.code}')
 
 origins = [
     "http://127.0.0.1:8000",
@@ -43,4 +72,5 @@ app.include_router(permission.router)
 app.include_router(users.router)
 app.include_router(review.router)
 app.include_router(celery.router)
+# app.include_router(websocket.router)
  
