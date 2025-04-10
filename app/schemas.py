@@ -91,3 +91,7 @@ class ReviewRead(ReviewBase):
 
     class Config:
         from_attributes = True
+
+
+class CeleryMessage(BaseModel):
+    message: Optional[str] = None
